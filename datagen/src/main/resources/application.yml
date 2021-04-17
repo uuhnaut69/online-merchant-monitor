@@ -1,0 +1,11 @@
+server:
+  port: 9999
+spring:
+  application:
+    name: datagen
+  kafka:
+    bootstrap-servers: localhost:29092
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+orders:
+  output-topic: oder_streams
