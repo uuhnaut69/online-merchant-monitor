@@ -1,6 +1,5 @@
 package com.uuhnaut69.datagen.event;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -17,16 +16,15 @@ import java.util.UUID;
 @JsonNaming(PropertyNamingStrategy.SnakeCaseStrategy.class)
 public class Order {
 
-  private String restaurantId;
+  private Long restaurantId;
 
   private UUID orderId;
 
   private Set<OrderLine> orderLines;
 
-  private float lat;
+  private Float lat;
 
-  private float lon;
+  private Float lon;
 
-  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss", timezone = "ICT")
-  private Date orderedDate;
+  private Date createdAt;
 }

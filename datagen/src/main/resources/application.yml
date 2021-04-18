@@ -8,4 +8,4 @@ spring:
     producer:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 orders:
-  output-topic: oder_streams
+  output-topic: orders

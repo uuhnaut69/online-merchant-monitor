@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @JsonNaming(PropertyNamingStrategy.SnakeCaseStrategy.class)
 public class OrderLine {
 
-  private Dish dish;
+  private Long dishId;
 
-  private int unit;
+  private Integer unit;
 }
