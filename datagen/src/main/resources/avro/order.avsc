@@ -1,0 +1,56 @@
+{
+  "type": "record",
+  "name": "Order",
+  "namespace": "com.uuhnaut69.datagen.event",
+  "fields": [
+    {
+      "name": "restaurant_id",
+      "type": "long",
+      "doc": "Restaurant's id"
+    },
+    {
+      "name": "order_id",
+      "type": "string",
+      "doc": "Order's id"
+    },
+    {
+      "name": "lat",
+      "type": "double",
+      "doc": "Order's latitude"
+    },
+    {
+      "name": "lon",
+      "type": "double",
+      "doc": "Order's longitude"
+    },
+    {
+      "name": "created_at",
+      "type": "long",
+      "logicalType": "date",
+      "doc": "Created date"
+    },
+    {
+      "name": "order_lines",
+      "type": {
+        "type": "array",
+        "items": {
+          "name": "OrderLine",
+          "type": "record",
+          "fields": [
+            {
+              "name": "dish_id",
+              "type": "long",
+              "doc": "Dish's id"
+            },
+            {
+              "name": "unit",
+              "type": "int",
+              "doc": "Unit"
+            }
+          ]
+        }
+      },
+      "doc": "Order's items"
+    }
+  ]
+}

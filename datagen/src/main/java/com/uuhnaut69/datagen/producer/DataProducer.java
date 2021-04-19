@@ -11,8 +11,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.Random;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -24,9 +24,9 @@ import java.util.stream.IntStream;
 @EnableConfigurationProperties(OrderStreamConfig.class)
 public class DataProducer {
 
-  private static final Float LAT_PREFIX = 16F;
+  private static final Double LAT_PREFIX = 16D;
 
-  private static final Float LONG_PREFIX = 108F;
+  private static final Double LONG_PREFIX = 108D;
 
   private final OrderStreamConfig orderStreamConfig;
 
@@ -43,10 +43,10 @@ public class DataProducer {
         .forEach(
             value1 -> {
               order.setRestaurantId(1L);
-              order.setOrderId(UUID.randomUUID());
+              order.setOrderId(UUID.randomUUID().toString());
 
               var orderLineSize = rand.nextInt(5 - 1) + 1;
-              var orderLines = new HashSet<OrderLine>();
+              var orderLines = new ArrayList<OrderLine>();
 
               IntStream.range(0, orderLineSize)
                   .forEach(
@@ -61,7 +61,7 @@ public class DataProducer {
 
               order.setLat(LAT_PREFIX + rand.nextFloat());
               order.setLon(LONG_PREFIX + rand.nextFloat());
-              order.setCreatedAt(new Date());
+              order.setCreatedAt(new Date().getTime());
 
               this.kafkaTemplate.send(
                   orderStreamConfig.getOutputTopic(), order.getOrderId().toString(), order);

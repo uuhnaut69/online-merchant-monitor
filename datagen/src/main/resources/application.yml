@@ -6,6 +6,8 @@ spring:
   kafka:
     bootstrap-servers: localhost:29092
     producer:
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+    properties:
+      schema.registry.url: http://localhost:8081
 orders:
   output-topic: orders

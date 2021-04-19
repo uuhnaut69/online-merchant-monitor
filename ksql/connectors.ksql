@@ -1,0 +1,20 @@
+-- Create source connector from postgresql using debezium postgres connector
+CREATE SOURCE CONNECTOR `postgresql-connector` WITH (
+    'connector.class' = 'io.debezium.connector.postgresql.PostgresConnector',
+    'database.hostname' = 'postgresql',
+    'database.port' = '5432',
+    'database.user' = 'postgres',
+    'database.password' = 'postgres',
+    'database.dbname' = 'postgres',
+    'database.server.name' = 'postgres',
+    'decimal.handling.mode' = 'string',
+    'key.converter' = 'org.apache.kafka.connect.storage.StringConverter',
+    'key.converter.schemas.enable' = 'false',
+    'value.converter' = 'io.confluent.connect.avro.AvroConverter',
+    'value.converter.schema.registry.url' = 'http://schema-registry:8081',
+    'transforms' = 'unwrap,ExtractField',
+    'transforms.unwrap.type' = 'io.debezium.transforms.ExtractNewRecordState',
+    'transforms.ExtractField.type' = 'org.apache.kafka.connect.transforms.ExtractField$Key',
+    'transforms.unwrap.delete.handling.mode' = 'none',
+    'transforms.ExtractField.field' = 'id'
+);

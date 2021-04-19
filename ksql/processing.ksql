@@ -1,0 +1,26 @@
+-- Set offset to earliest
+SET 'auto.offset.reset' = 'earliest';
+
+-- Create dishes KTable
+CREATE TABLE DISHES (
+    dish_id VARCHAR PRIMARY KEY
+) WITH (
+    KAFKA_TOPIC = 'postgres.public.dishes', 
+    VALUE_FORMAT = 'AVRO'
+);
+
+-- Create restaurants KTable
+CREATE TABLE RESTAURANTS (
+    restaurant_id VARCHAR PRIMARY KEY
+) WITH (
+    KAFKA_TOPIC = 'postgres.public.restaurants', 
+    VALUE_FORMAT = 'AVRO'
+);
+
+-- CREATE orders KStream
+CREATE STREAM orderstreams (
+    rowkey VARCHAR KEY
+) WITH (
+    KAFKA_TOPIC = 'orders',
+    VALUE_FORMAT = 'AVRO'
+);
