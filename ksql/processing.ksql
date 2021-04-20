@@ -52,14 +52,25 @@ create stream order_with_restaurant_dish as
         owr.LAT as LAT,
         owr.LON as LON,
         owr.CREATED_AT as CREATED_AT,
-        d.DISH_ID as DISH_ID,
-        d.NAME as DISH_NAME,
-        d.price as DISH_PRICE,
-        d.type as DISH_TYPE,
-        owr.ORDER_LINE -> UNIT as UNIT
+        STRUCT(
+            DISH_ID := d.DISH_ID,
+            DISH_NAME := d.NAME,
+            DISH_PRICE := d.PRICE,
+            DISH_TYPE := d.TYPE,
+            UNIT := owr.ORDER_LINE -> UNIT
+        ) as ORDER_LINE,
+        cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
     from
         ORDER_WITH_RESTAURANT owr
     inner join DISHES d on
-        cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.DISH_ID 
+        cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.DISH_ID
     partition by owr.ORDER_ID;
 
+-- 3. Ordered count of each dish per 30 seconds
+create table thirtySecondsDishReport as
+    select
+       ORDER_LINE -> DISH_NAME as DISH_NAME,
+       count(1) as orderCount
+    from
+        order_with_restaurant_dish window TUMBLING (SIZE 30 SECONDS)
+    group by (ORDER_LINE -> DISH_NAME);
