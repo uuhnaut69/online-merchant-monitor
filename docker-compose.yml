@@ -15,7 +15,7 @@ services:
     restart: on-failure
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:6.0.1
+    image: confluentinc/cp-zookeeper:6.1.1
     hostname: zookeeper
     container_name: zookeeper
     ports:
@@ -26,13 +26,14 @@ services:
     restart: on-failure
 
   broker:
-    image: confluentinc/cp-kafka:6.0.1
+    image: confluentinc/cp-kafka:6.1.1
     hostname: broker
     container_name: broker
     depends_on:
       - zookeeper
     ports:
       - "29092:29092"
+      - "9101:9101"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
@@ -55,7 +56,7 @@ services:
     restart: on-failure
 
   schema-registry:
-    image: confluentinc/cp-schema-registry:6.0.1
+    image: confluentinc/cp-schema-registry:6.1.1
     hostname: schema-registry
     container_name: schema-registry
     depends_on:
@@ -69,7 +70,7 @@ services:
     restart: on-failure
 
   connect:
-    image: confluentinc/cp-kafka-connect:6.0.1
+    image: confluentinc/cp-kafka-connect:6.1.1
     hostname: connect
     container_name: connect
     depends_on:
@@ -96,7 +97,7 @@ services:
       CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       # CLASSPATH required due to CC-2422
-      CLASSPATH: /usr/share/java/monitoring-interceptors/monitoring-interceptors-6.0.1.jar
+      CLASSPATH: /usr/share/java/monitoring-interceptors/monitoring-interceptors-6.1.1.jar
       CONNECT_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
       CONNECT_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
@@ -104,11 +105,13 @@ services:
     command:
       "bash -c 'confluent-hub install --no-prompt debezium/debezium-connector-postgresql:latest &&\
      confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:latest && \
+     confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:latest && \
+     confluent-hub install --no-prompt mongodb/kafka-connect-mongodb:latest && \
      /etc/confluent/docker/run'"
     restart: on-failure
 
   ksqldb-server:
-    image: confluentinc/ksqldb-server:0.15.0
+    image: confluentinc/ksqldb-server:0.17.0
     hostname: ksqldb-server
     container_name: ksqldb-server
     depends_on:
@@ -129,7 +132,7 @@ services:
     restart: on-failure
 
   ksqldb-cli:
-    image: confluentinc/ksqldb-cli:0.15.0
+    image: confluentinc/ksqldb-cli:0.17.0
     container_name: ksqldb-cli
     depends_on:
       - broker
@@ -139,7 +142,7 @@ services:
     restart: on-failure
 
   control-center:
-    image: confluentinc/cp-enterprise-control-center:6.0.1
+    image: confluentinc/cp-enterprise-control-center:6.1.1
     hostname: control-center
     container_name: control-center
     depends_on:
@@ -163,3 +166,21 @@ services:
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
       PORT: 9021
     restart: on-failure
+
+  citus:
+    image: citusdata/citus
+    container_name: citus
+    ports:
+      - 5433:5432
+    environment:
+      - POSTGRES_DB=merchant
+      - POSTGRES_USER=merchant
+      - POSTGRES_PASSWORD=merchant
+    restart: on-failure
+#
+#  superset:
+#    image: apache/superset
+#    container_name: superset
+#    ports:
+#      - 9669:8088
+#    restart: on-failure

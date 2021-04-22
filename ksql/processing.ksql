@@ -3,7 +3,7 @@ SET 'auto.offset.reset' = 'earliest';
 
 -- Create dishes KTable
 CREATE TABLE DISHES (
-    dish_id VARCHAR PRIMARY KEY
+    rowkey VARCHAR PRIMARY KEY
 ) WITH (
     KAFKA_TOPIC = 'postgres.public.dishes', 
     VALUE_FORMAT = 'AVRO'
@@ -11,7 +11,7 @@ CREATE TABLE DISHES (
 
 -- Create restaurants KTable
 CREATE TABLE RESTAURANTS (
-    restaurant_id VARCHAR PRIMARY KEY
+    rowkey VARCHAR PRIMARY KEY
 ) WITH (
     KAFKA_TOPIC = 'postgres.public.restaurants', 
     VALUE_FORMAT = 'AVRO'
@@ -28,7 +28,7 @@ CREATE STREAM ORDERSTREAMS (
 -- Join processing
 
 -- 1. Enrich order with restaurant name
-create stream order_with_restaurant as 
+create or replace stream order_with_restaurant with(KAFKA_TOPIC='order_with_restaurant', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP='CREATED_AT') as 
     select
         o.RESTAURANT_ID as RESTAURANT_ID,
         r.NAME as NAME,
@@ -40,11 +40,11 @@ create stream order_with_restaurant as
     from
         ORDERSTREAMS o
     inner join RESTAURANTS r on
-        cast(o.RESTAURANT_ID as STRING) = r.RESTAURANT_ID 
-    partition by o.RESTAURANT_ID;
+        cast(o.RESTAURANT_ID as STRING) = r.ROWKEY 
+    partition by o.ORDER_ID;
 
 -- 2. Enrich order with restaurant name and dish info
-create stream order_with_restaurant_dish as
+create or replace stream order_with_restaurant_dish with(KAFKA_TOPIC='order_with_restaurant_dish', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP='CREATED_AT') as
     select
         owr.RESTAURANT_ID as RESTAURANT_ID,
         owr.NAME as RESTAURANT_NAME,
@@ -52,25 +52,31 @@ create stream order_with_restaurant_dish as
         owr.LAT as LAT,
         owr.LON as LON,
         owr.CREATED_AT as CREATED_AT,
-        STRUCT(
-            DISH_ID := d.DISH_ID,
-            DISH_NAME := d.NAME,
-            DISH_PRICE := d.PRICE,
-            DISH_TYPE := d.TYPE,
-            UNIT := owr.ORDER_LINE -> UNIT
+        map(
+            'DISH_ID' := d.ROWKEY, 
+            'DISH_NAME' := d.NAME, 
+            'DISH_PRICE' := d.PRICE, 
+            'DISH_TYPE' := d.TYPE, 'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
         ) as ORDER_LINE,
         cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
     from
         ORDER_WITH_RESTAURANT owr
     inner join DISHES d on
-        cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.DISH_ID
+        cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.ROWKEY
     partition by owr.ORDER_ID;
 
 -- 3. Ordered count of each dish per 30 seconds
-create table thirtySecondsDishReport as
+create table dish_order_30seconds_report with(KAFKA_TOPIC='dish_order_30seconds_report', KEY_FORMAT='AVRO', VALUE_FORMAT='AVRO') as
     select
-       ORDER_LINE -> DISH_NAME as DISH_NAME,
-       count(1) as orderCount
+        ORDER_LINE['DISH_ID'],
+        ORDER_LINE['DISH_NAME'],
+        cast(as_value(ORDER_LINE['DISH_ID']) as BIGINT) as DISH_ID,
+        as_value(ORDER_LINE['DISH_NAME']) as DISH_NAME,
+        as_value(FROM_UNIXTIME(WINDOWSTART)) as WINDOW_START,
+        as_value(FROM_UNIXTIME(WINDOWEND)) as WINDOW_END,
+        count(1) as ORDER_COUNT
     from
         order_with_restaurant_dish window TUMBLING (SIZE 30 SECONDS)
-    group by (ORDER_LINE -> DISH_NAME);
+    group by ORDER_LINE['DISH_ID'], ORDER_LINE['DISH_NAME'];
+
+
