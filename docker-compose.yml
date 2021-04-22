@@ -178,9 +178,9 @@ services:
       - POSTGRES_PASSWORD=merchant
     restart: on-failure
 #
-#  superset:
-#    image: apache/superset
-#    container_name: superset
-#    ports:
-#      - 9669:8088
-#    restart: on-failure
+  superset:
+    image: apache/superset
+    container_name: superset
+    ports:
+      - 9669:8088
+    restart: on-failure
