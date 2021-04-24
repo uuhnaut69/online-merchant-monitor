@@ -44,6 +44,7 @@ create or replace stream order_with_restaurant with(KAFKA_TOPIC='order_with_rest
     partition by o.ORDER_ID;
 
 -- 2. Enrich order with restaurant name and dish info
+-- Currently KSQLDB aggregate_functions COLLECT_SET() not support MAP, STRUCT, ARRAY types so we need convert complex column to VARCHAR/STRING
 create or replace stream order_with_restaurant_dish with(KAFKA_TOPIC='order_with_restaurant_dish', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP='CREATED_AT') as
     select
         owr.RESTAURANT_ID as RESTAURANT_ID,
@@ -59,6 +60,7 @@ create or replace stream order_with_restaurant_dish with(KAFKA_TOPIC='order_with
             'DISH_TYPE' := d.TYPE, 
             'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
         ) as ORDER_LINE,
+        ('DISH_ID:='+ d.ROWKEY + ',DISH_NAME:=' + d.NAME + ',DISH_PRICE:='+ d.PRICE + ',DISH_TYPE:=' + d.type + ',ORDER_UNIT:=' + cast(owr.ORDER_LINE -> UNIT as VARCHAR)) as ORDER_LINE_STRING,
         cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
     from
         ORDER_WITH_RESTAURANT owr
@@ -79,5 +81,33 @@ create table dish_order_30seconds_report with(KAFKA_TOPIC='dish_order_30seconds_
     from
         order_with_restaurant_dish window TUMBLING (SIZE 30 SECONDS)
     group by ORDER_LINE['DISH_ID'], ORDER_LINE['DISH_NAME'];
+
+-- 4. Enriched orders
+create table enriched_orders with(KAFKA_TOPIC = 'enriched_orders', KEY_FORMAT = 'AVRO', VALUE_FORMAT = 'AVRO', TIMESTAMP='CREATED_AT') as
+    select
+        RESTAURANT_ID,
+        RESTAURANT_NAME,
+        ORDER_ID,
+        LAT,
+        LON,
+        CREATED_AT,
+        as_value(RESTAURANT_ID) as ENRICHED_ORDER_RESTAURANT_ID,
+        as_value(RESTAURANT_NAME) as ENRICHED_ORDER_RESTAURANT_NAME,
+        as_value(ORDER_ID) as ENRICHED_ORDER_ID,
+        as_value(LAT) as ENRICED_ORDER_LAT,
+        as_value(LON) as ENRICED_ORDER_LON,
+        as_value(CREATED_AT) as ENRICHED_ORDER_CREATED_DATE,
+        transform(collect_set(ORDER_LINE_STRING),
+        item => SPLIT_TO_MAP(item, ',', ':=')) as ENRICHED_ORDER_LINES,
+        sum(ORDER_LINE_PRICE) as ENRICHED_ORDER_TOTAL_PRICE
+    from
+        order_with_restaurant_dish
+    group by
+        RESTAURANT_ID,
+        RESTAURANT_NAME,
+        ORDER_ID,
+        LAT,
+        LON,
+        CREATED_AT;    
 
 

@@ -184,27 +184,28 @@ with(KAFKA_TOPIC='order_with_restaurant', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO
 ```
 Enrich (1) downstream with dish info
 
+Currently KSQLDB aggregate_functions COLLECT_SET() not support MAP, STRUCT, ARRAY types so we need convert complex column to VARCHAR/STRING
 ```sql
-create or replace stream order_with_restaurant_dish 
-with(KAFKA_TOPIC='order_with_restaurant_dish', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP='CREATED_AT') as
-    select
-        owr.RESTAURANT_ID as RESTAURANT_ID,
-        owr.NAME as RESTAURANT_NAME,
-        owr.ORDER_ID as ORDER_ID,
-        owr.LAT as LAT,
-        owr.LON as LON,
-        owr.CREATED_AT as CREATED_AT,
-        map(
-            'DISH_ID' := d.ROWKEY, 
-            'DISH_NAME' := d.NAME, 
-            'DISH_PRICE' := d.PRICE, 
-            'DISH_TYPE' := d.TYPE, 
+create or replace stream order_with_restaurant_dish with(KAFKA_TOPIC='order_with_restaurant_dish', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP='CREATED_AT') as
+select
+    owr.RESTAURANT_ID as RESTAURANT_ID,
+    owr.NAME as RESTAURANT_NAME,
+    owr.ORDER_ID as ORDER_ID,
+    owr.LAT as LAT,
+    owr.LON as LON,
+    owr.CREATED_AT as CREATED_AT,
+    map(
+            'DISH_ID' := d.ROWKEY,
+            'DISH_NAME' := d.NAME,
+            'DISH_PRICE' := d.PRICE,
+            'DISH_TYPE' := d.TYPE,
             'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
         ) as ORDER_LINE,
-        cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
-    from
-        ORDER_WITH_RESTAURANT owr
-    inner join DISHES d on
+    ('DISH_ID:='+ d.ROWKEY + ',DISH_NAME:=' + d.NAME + ',DISH_PRICE:='+ d.PRICE + ',DISH_TYPE:=' + d.type + ',ORDER_UNIT:=' + cast(owr.ORDER_LINE -> UNIT as VARCHAR)) as ORDER_LINE_STRING,
+    cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
+from
+    ORDER_WITH_RESTAURANT owr
+        inner join DISHES d on
         cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.ROWKEY
     partition by owr.ORDER_ID;
 ```
@@ -262,6 +263,63 @@ CREATE SINK CONNECTOR `dish_order_30seconds_report_sink` WITH (
     'auto.create' = true,
     'auto.evolve' = true
 );
+```
+
+Enriched orders
+
+```sql
+create table enriched_orders with(KAFKA_TOPIC = 'enriched_orders', KEY_FORMAT = 'AVRO', VALUE_FORMAT = 'AVRO', TIMESTAMP='CREATED_AT') as
+    select
+        RESTAURANT_ID,
+        RESTAURANT_NAME,
+        ORDER_ID,
+        LAT,
+        LON,
+        CREATED_AT,
+        as_value(RESTAURANT_ID) as ENRICHED_ORDER_RESTAURANT_ID,
+        as_value(RESTAURANT_NAME) as ENRICHED_ORDER_RESTAURANT_NAME,
+        as_value(ORDER_ID) as ENRICHED_ORDER_ID,
+        as_value(LAT) as ENRICED_ORDER_LAT,
+        as_value(LON) as ENRICED_ORDER_LON,
+        as_value(CREATED_AT) as ENRICHED_ORDER_CREATED_DATE,
+        transform(collect_set(ORDER_LINE_STRING),
+        item => SPLIT_TO_MAP(item, ',', ':=')) as ENRICHED_ORDER_LINES,
+        sum(ORDER_LINE_PRICE) as ENRICHED_ORDER_TOTAL_PRICE
+    from
+        order_with_restaurant_dish
+    group by
+        RESTAURANT_ID,
+        RESTAURANT_NAME,
+        ORDER_ID,
+        LAT,
+        LON,
+        CREATED_AT;
+```
+
+Test
+
+```sql
+select * from enriched_orders emit changes limit 1;
+```
+
+Result
+
+```sql
++----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+|RESTAURANT|RESTAURANT|ORDER_ID  |LAT       |LON       |CREATED_AT|ENRICHED_O|ENRICHED_O|ENRICHED_O|ENRICED_OR|ENRICED_OR|ENRICHED_O|ENRICHED_O|ENRICHED_O|
+|_ID       |_NAME     |          |          |          |          |RDER_RESTA|RDER_RESTA|RDER_ID   |DER_LAT   |DER_LON   |RDER_CREAT|RDER_LINES|RDER_TOTAL|
+|          |          |          |          |          |          |URANT_ID  |URANT_NAME|          |          |          |ED_DATE   |          |_PRICE    |
++----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+|1         |RESTAURANT|a1dda2e9-e|16.8390354|108.503397|1619249916|1         |RESTAURANT|a1dda2e9-e|16.8390354|108.503397|1619249916|[{DISH_NAM|147000.0  |
+|          |_A        |7a6-4076-a|514122    |64356613  |935       |          |_A        |7a6-4076-a|514122    |64356613  |935       |E=Hoành th|          |
+|          |          |489-387fc5|          |          |          |          |          |489-387fc5|          |          |          |ánh chiên,|          |
+|          |          |feff6f    |          |          |          |          |          |feff6f    |          |          |          | ORDER_UNI|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |T=3, DISH_|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |PRICE=4900|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |0.00, DISH|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |_TYPE=DIMS|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |UM, DISH_I|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |D=15}]    |          |
 ```
 
 Connect Superset to Citus

@@ -177,7 +177,7 @@ services:
       - POSTGRES_USER=merchant
       - POSTGRES_PASSWORD=merchant
     restart: on-failure
-#
+
   superset:
     image: apache/superset
     container_name: superset
