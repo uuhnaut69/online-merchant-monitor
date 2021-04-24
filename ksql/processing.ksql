@@ -56,7 +56,8 @@ create or replace stream order_with_restaurant_dish with(KAFKA_TOPIC='order_with
             'DISH_ID' := d.ROWKEY, 
             'DISH_NAME' := d.NAME, 
             'DISH_PRICE' := d.PRICE, 
-            'DISH_TYPE' := d.TYPE, 'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
+            'DISH_TYPE' := d.TYPE, 
+            'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
         ) as ORDER_LINE,
         cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
     from
@@ -65,7 +66,7 @@ create or replace stream order_with_restaurant_dish with(KAFKA_TOPIC='order_with
         cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.ROWKEY
     partition by owr.ORDER_ID;
 
--- 3. Ordered count of each dish per 30 seconds
+-- 3. Aggregate orders of each dish per 30 seconds
 create table dish_order_30seconds_report with(KAFKA_TOPIC='dish_order_30seconds_report', KEY_FORMAT='AVRO', VALUE_FORMAT='AVRO') as
     select
         ORDER_LINE['DISH_ID'],
