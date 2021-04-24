@@ -1,6 +1,6 @@
 # Online merchant monitor
 
-An example about online merchant monitor based on Kafka Ecosystem
+An example about online merchant monitor based on Kafka, Kafka Stream, Kafka Connect,KSQL
 
 ![Flow](https://github.com/uuhnaut69/online-merchant-monitor/blob/main/images/Flow.png)
 
@@ -19,6 +19,7 @@ An example about online merchant monitor based on Kafka Ecosystem
 ```shell
 docker-compose up -d
 ```
+
 - Check health
 
 ```shell
@@ -61,7 +62,9 @@ docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
 Create kafka connector
 
 ```sql
-CREATE SOURCE CONNECTOR `postgresql-connector` WITH (
+CREATE
+SOURCE CONNECTOR `postgresql-connector`
+WITH (
     'connector.class' = 'io.debezium.connector.postgresql.PostgresConnector',
     'database.hostname' = 'postgresql',
     'database.port' = '5432',
@@ -91,12 +94,13 @@ SET 'auto.offset.reset' = 'earliest';
 Create DISHES KTable
 
 ```sql
-CREATE TABLE DISHES (
+CREATE TABLE DISHES
+(
     rowkey VARCHAR PRIMARY KEY
 ) WITH (
-    KAFKA_TOPIC = 'postgres.public.dishes', 
-    VALUE_FORMAT = 'AVRO'
-);
+      KAFKA_TOPIC = 'postgres.public.dishes',
+      VALUE_FORMAT = 'AVRO'
+      );
 ```
 
 ```sql
@@ -112,15 +116,16 @@ RESTAURANT_ID | BIGINT
 ------------------------------------------------
 ```
 
-
 Create RESTAURANTS KTable
+
 ```sql
-CREATE TABLE RESTAURANTS (
+CREATE TABLE RESTAURANTS
+(
     rowkey VARCHAR PRIMARY KEY
 ) WITH (
-    KAFKA_TOPIC = 'postgres.public.restaurants', 
-    VALUE_FORMAT = 'AVRO'
-);
+      KAFKA_TOPIC = 'postgres.public.restaurants',
+      VALUE_FORMAT = 'AVRO'
+      );
 ```
 
 ```sql
@@ -142,9 +147,11 @@ cd datagen && ./mvnw spring-boot:run
 Create ORDERSTREAMS KStream
 
 ```sql
-CREATE STREAM ORDERSTREAMS (
+CREATE
+STREAM ORDERSTREAMS (
     rowkey VARCHAR KEY
-) WITH (
+)
+WITH (
     KAFKA_TOPIC = 'orders',
     VALUE_FORMAT = 'AVRO'
 );
@@ -163,76 +170,85 @@ Name                 : ORDERSTREAMS
  ORDER_LINES   | ARRAY<STRUCT<DISH_ID BIGINT, UNIT INTEGER>>
 -------------------------------------------------------------
 ```
+
 Flatten order streams and enrich with restaurant info (1)
 
 ```sql
-create or replace stream order_with_restaurant 
-with(KAFKA_TOPIC='order_with_restaurant', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP='CREATED_AT') as 
-    select
-        o.RESTAURANT_ID as RESTAURANT_ID,
-        r.NAME as NAME,
-        o.ORDER_ID as ORDER_ID,
-        o.LAT as LAT,
-        o.LON as LON,
-        o.CREATED_AT as CREATED_AT,
-        EXPLODE(o.ORDER_LINES) as ORDER_LINE
-    from
-        ORDERSTREAMS o
-    inner join RESTAURANTS r on
-        cast(o.RESTAURANT_ID as STRING) = r.ROWKEY 
-    partition by o.ORDER_ID;
+create
+or
+replace
+stream order_with_restaurant
+with (KAFKA_TOPIC='order_with_restaurant', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP ='CREATED_AT') as
+select o.RESTAURANT_ID        as RESTAURANT_ID,
+       r.NAME                 as NAME,
+       o.ORDER_ID             as ORDER_ID,
+       o.LAT                  as LAT,
+       o.LON                  as LON,
+       o.CREATED_AT           as CREATED_AT,
+       EXPLODE(o.ORDER_LINES) as ORDER_LINE
+from ORDERSTREAMS o
+         inner join RESTAURANTS r on
+    cast(o.RESTAURANT_ID as STRING) = r.ROWKEY partition by o.ORDER_ID;
 ```
+
 Enrich (1) downstream with dish info
 
-Currently KSQLDB aggregate_functions COLLECT_SET() not support MAP, STRUCT, ARRAY types so we need convert complex column to VARCHAR/STRING
+Currently KSQLDB aggregate_functions COLLECT_SET() not support MAP, STRUCT, ARRAY types so we need convert complex
+column to VARCHAR/STRING
+
 ```sql
-create or replace stream order_with_restaurant_dish with(KAFKA_TOPIC='order_with_restaurant_dish', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP='CREATED_AT') as
-select
-    owr.RESTAURANT_ID as RESTAURANT_ID,
-    owr.NAME as RESTAURANT_NAME,
-    owr.ORDER_ID as ORDER_ID,
-    owr.LAT as LAT,
-    owr.LON as LON,
-    owr.CREATED_AT as CREATED_AT,
-    map(
-            'DISH_ID' := d.ROWKEY,
-            'DISH_NAME' := d.NAME,
-            'DISH_PRICE' := d.PRICE,
-            'DISH_TYPE' := d.TYPE,
-            'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
-        ) as ORDER_LINE,
-    ('DISH_ID:='+ d.ROWKEY + ',DISH_NAME:=' + d.NAME + ',DISH_PRICE:='+ d.PRICE + ',DISH_TYPE:=' + d.type + ',ORDER_UNIT:=' + cast(owr.ORDER_LINE -> UNIT as VARCHAR)) as ORDER_LINE_STRING,
-    cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
-from
-    ORDER_WITH_RESTAURANT owr
-        inner join DISHES d on
-        cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.ROWKEY
-    partition by owr.ORDER_ID;
+create
+or
+replace
+stream order_with_restaurant_dish
+with (KAFKA_TOPIC='order_with_restaurant_dish', KEY_FORMAT='KAFKA', VALUE_FORMAT='AVRO', TIMESTAMP ='CREATED_AT') as
+select owr.RESTAURANT_ID                                                as RESTAURANT_ID,
+       owr.NAME                                                         as RESTAURANT_NAME,
+       owr.ORDER_ID                                                     as ORDER_ID,
+       owr.LAT                                                          as LAT,
+       owr.LON                                                          as LON,
+       owr.CREATED_AT                                                   as CREATED_AT,
+       map(
+               'DISH_ID' := d.ROWKEY,
+               'DISH_NAME' := d.NAME,
+               'DISH_PRICE' := d.PRICE,
+               'DISH_TYPE' := d.TYPE,
+               'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
+           )                                                            as ORDER_LINE,
+       ('DISH_ID:=' + d.ROWKEY + ',DISH_NAME:=' + d.NAME + ',DISH_PRICE:=' + d.PRICE + ',DISH_TYPE:=' + d.type +
+        ',ORDER_UNIT:=' + cast(owr.ORDER_LINE -> UNIT as VARCHAR))      as ORDER_LINE_STRING,
+       cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
+from ORDER_WITH_RESTAURANT owr
+         inner join DISHES d on
+    cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.ROWKEY partition by owr.ORDER_ID;
 ```
 
 Aggregate orders of each dish per 30 seconds
 
 ```sql
-create table dish_order_30seconds_report with(KAFKA_TOPIC='dish_order_30seconds_report', KEY_FORMAT='AVRO', VALUE_FORMAT='AVRO') as
-    select
-        ORDER_LINE['DISH_ID'],
-        ORDER_LINE['DISH_NAME'],
-        cast(as_value(ORDER_LINE['DISH_ID']) as BIGINT) as DISH_ID,
-        as_value(ORDER_LINE['DISH_NAME']) as DISH_NAME,
-        as_value(FROM_UNIXTIME(WINDOWSTART)) as WINDOW_START,
-        as_value(FROM_UNIXTIME(WINDOWEND)) as WINDOW_END,
-        count(1) as ORDER_COUNT
-    from
-        order_with_restaurant_dish window TUMBLING (SIZE 30 SECONDS)
+create table dish_order_30seconds_report
+    with (KAFKA_TOPIC = 'dish_order_30seconds_report', KEY_FORMAT = 'AVRO', VALUE_FORMAT = 'AVRO') as
+select ORDER_LINE['DISH_ID'],
+       ORDER_LINE['DISH_NAME'],
+       cast(as_value(ORDER_LINE['DISH_ID']) as BIGINT) as DISH_ID,
+       as_value(ORDER_LINE['DISH_NAME'])               as DISH_NAME,
+       as_value(FROM_UNIXTIME(WINDOWSTART))            as WINDOW_START,
+       as_value(FROM_UNIXTIME(WINDOWEND))              as WINDOW_END,
+       count(1)                                        as ORDER_COUNT
+from order_with_restaurant_dish window TUMBLING (SIZE 30 SECONDS)
     group by ORDER_LINE['DISH_ID'], ORDER_LINE['DISH_NAME'];
 ```
 
 Test:
 
 ```sql
-select DISH_ID, DISH_NAME, WINDOW_START, WINDOW_END, ORDER_COUNT from dish_order_30seconds_report emit changes limit 5;
+select DISH_ID, DISH_NAME, WINDOW_START, WINDOW_END, ORDER_COUNT
+from dish_order_30seconds_report emit changes
+limit 5;
 ```
+
 Result:
+
 ```sql
 +---------------------------------------------+---------------------------------------------+---------------------------------------------+---------------------------------------------+---------------------------------------------+
 |DISH_ID                                      |DISH_NAME                                    |WINDOW_START                                 |WINDOW_END                                   |ORDER_COUNT                                  |
@@ -247,7 +263,9 @@ Result:
 Create sink connector save aggregate result to Citus Data
 
 ```sql
-CREATE SINK CONNECTOR `dish_order_30seconds_report_sink` WITH (
+CREATE
+SINK CONNECTOR `dish_order_30seconds_report_sink`
+WITH (
     'connector.class' = 'io.confluent.connect.jdbc.JdbcSinkConnector',
     'connection.url' = 'jdbc:postgresql://citus:5432/merchant',
     'connection.user' = 'merchant',
@@ -265,41 +283,41 @@ CREATE SINK CONNECTOR `dish_order_30seconds_report_sink` WITH (
 );
 ```
 
-Enriched orders
+Create enriched orders KTable
 
 ```sql
-create table enriched_orders with(KAFKA_TOPIC = 'enriched_orders', KEY_FORMAT = 'AVRO', VALUE_FORMAT = 'AVRO', TIMESTAMP='CREATED_AT') as
-    select
-        RESTAURANT_ID,
-        RESTAURANT_NAME,
-        ORDER_ID,
-        LAT,
-        LON,
-        CREATED_AT,
-        as_value(RESTAURANT_ID) as ENRICHED_ORDER_RESTAURANT_ID,
-        as_value(RESTAURANT_NAME) as ENRICHED_ORDER_RESTAURANT_NAME,
-        as_value(ORDER_ID) as ENRICHED_ORDER_ID,
-        as_value(LAT) as ENRICED_ORDER_LAT,
-        as_value(LON) as ENRICED_ORDER_LON,
-        as_value(CREATED_AT) as ENRICHED_ORDER_CREATED_DATE,
-        transform(collect_set(ORDER_LINE_STRING),
-        item => SPLIT_TO_MAP(item, ',', ':=')) as ENRICHED_ORDER_LINES,
-        sum(ORDER_LINE_PRICE) as ENRICHED_ORDER_TOTAL_PRICE
-    from
-        order_with_restaurant_dish
-    group by
-        RESTAURANT_ID,
-        RESTAURANT_NAME,
-        ORDER_ID,
-        LAT,
-        LON,
-        CREATED_AT;
+create table enriched_orders
+    with (KAFKA_TOPIC = 'enriched_orders', KEY_FORMAT = 'AVRO', VALUE_FORMAT = 'AVRO', TIMESTAMP = 'CREATED_AT') as
+select RESTAURANT_ID,
+       RESTAURANT_NAME,
+       ORDER_ID,
+       LAT,
+       LON,
+       CREATED_AT,
+       as_value(RESTAURANT_ID)                          as ENRICHED_ORDER_RESTAURANT_ID,
+       as_value(RESTAURANT_NAME)                        as ENRICHED_ORDER_RESTAURANT_NAME,
+       as_value(ORDER_ID)                               as ENRICHED_ORDER_ID,
+       as_value(LAT)                                    as ENRICED_ORDER_LAT,
+       as_value(LON)                                    as ENRICED_ORDER_LON,
+       as_value(CREATED_AT)                             as ENRICHED_ORDER_CREATED_DATE,
+       transform(collect_set(ORDER_LINE_STRING),
+                 item => SPLIT_TO_MAP(item, ',', ':=')) as ENRICHED_ORDER_LINES,
+       sum(ORDER_LINE_PRICE)                            as ENRICHED_ORDER_TOTAL_PRICE
+from order_with_restaurant_dish
+group by RESTAURANT_ID,
+         RESTAURANT_NAME,
+         ORDER_ID,
+         LAT,
+         LON,
+         CREATED_AT;
 ```
 
 Test
 
 ```sql
-select * from enriched_orders emit changes limit 1;
+select *
+from enriched_orders emit changes
+limit 1;
 ```
 
 Result
