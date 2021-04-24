@@ -2,6 +2,10 @@
 
 An example about online merchant monitor based on Kafka Ecosystem
 
+![Flow](https://github.com/uuhnaut69/online-merchant-monitor/blob/main/images/Flow.png)
+
+![DemoChart](https://github.com/uuhnaut69/online-merchant-monitor/blob/main/images/DemoChart.png)
+
 ## Prerequisites
 
 - `Java 11+`
