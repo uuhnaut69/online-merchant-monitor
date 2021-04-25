@@ -2,9 +2,9 @@
 
 An example about online merchant monitor based on Kafka, Kafka Stream, Kafka Connect,KSQL
 
-![Flow](https://github.com/uuhnaut69/online-merchant-monitor/blob/main/images/Flow.png)
+![Flow](https://github.com/uuhnaut69/online-merchant-monitor/blob/main/images/ETL-Flow.png)
 
-![DemoChart](https://github.com/uuhnaut69/online-merchant-monitor/blob/main/images/DemoChart.png)
+![DemoChart](https://github.com/uuhnaut69/online-merchant-monitor/blob/main/images/OrderDishCount.png)
 
 ## Prerequisites
 
