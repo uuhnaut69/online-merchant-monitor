@@ -188,7 +188,7 @@ select o.RESTAURANT_ID        as RESTAURANT_ID,
        EXPLODE(o.ORDER_LINES) as ORDER_LINE
 from ORDERSTREAMS o
          inner join RESTAURANTS r on
-    cast(o.RESTAURANT_ID as STRING) = r.ROWKEY partition by o.ORDER_ID;
+    cast(o.RESTAURANT_ID as STRING) = r.ROWKEY partition by o.ORDER_ID emit changes;
 ```
 
 Enrich (1) downstream with dish info
@@ -220,7 +220,7 @@ select owr.RESTAURANT_ID                                                as RESTA
        cast(d.PRICE as DOUBLE) * cast(owr.ORDER_LINE -> UNIT as DOUBLE) as ORDER_LINE_PRICE
 from ORDER_WITH_RESTAURANT owr
          inner join DISHES d on
-    cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.ROWKEY partition by owr.ORDER_ID;
+    cast(owr.ORDER_LINE -> DISH_ID as STRING) = d.ROWKEY partition by owr.ORDER_ID emit changes;
 ```
 
 Aggregate orders of each dish per 30 seconds
@@ -236,7 +236,7 @@ select ORDER_LINE['DISH_ID'],
        as_value(FROM_UNIXTIME(WINDOWEND))              as WINDOW_END,
        count(1)                                        as ORDER_COUNT
 from order_with_restaurant_dish window TUMBLING (SIZE 30 SECONDS)
-    group by ORDER_LINE['DISH_ID'], ORDER_LINE['DISH_NAME'];
+    group by ORDER_LINE['DISH_ID'], ORDER_LINE['DISH_NAME'] emit changes;
 ```
 
 Test:
@@ -250,14 +250,14 @@ limit 5;
 Result:
 
 ```sql
-+---------------------------------------------+---------------------------------------------+---------------------------------------------+---------------------------------------------+---------------------------------------------+
-|DISH_ID                                      |DISH_NAME                                    |WINDOW_START                                 |WINDOW_END                                   |ORDER_COUNT                                  |
-+---------------------------------------------+---------------------------------------------+---------------------------------------------+---------------------------------------------+---------------------------------------------+
-|12                                           |Mỳ vịt tiềm                                  |2021-04-24T02:55:30.000                      |2021-04-24T02:56:00.000                      |1                                            |
-|11                                           |Mì xíu                                       |2021-04-24T02:55:30.000                      |2021-04-24T02:56:00.000                      |1                                            |
-|24                                           |Gà quay nguyên con                           |2021-04-24T02:55:30.000                      |2021-04-24T02:56:00.000                      |1                                            |
-|6                                            |Cơm chiên dương châu                         |2021-04-24T02:55:30.000                      |2021-04-24T02:56:00.000                      |1                                            |
-|16                                           |Mì xào hải sản                               |2021-04-24T02:55:30.000                      |2021-04-24T02:56:00.000                      |1                                            |
++---------------------------------+---------------------------------+---------------------------------+---------------------------------+---------------------------------+
+|DISH_ID                          |DISH_NAME                        |WINDOW_START                     |WINDOW_END                       |ORDER_COUNT                      |
++---------------------------------+---------------------------------+---------------------------------+---------------------------------+---------------------------------+
+|7                                |Roasted pork meat                |2021-04-25T13:16:00.000          |2021-04-25T13:16:30.000          |1                                |
+|2                                |Grilled octopus                  |2021-04-25T13:16:00.000          |2021-04-25T13:16:30.000          |1                                |
+|8                                |Seaweed soup                     |2021-04-25T13:16:00.000          |2021-04-25T13:16:30.000          |1                                |
+|9                                |Sour soup                        |2021-04-25T13:16:00.000          |2021-04-25T13:16:30.000          |1                                |
+|5                                |Roasted duck                     |2021-04-25T13:16:00.000          |2021-04-25T13:16:30.000          |1                                |
 ```
 
 Create sink connector save aggregate result to Citus Data
@@ -309,7 +309,7 @@ group by RESTAURANT_ID,
          ORDER_ID,
          LAT,
          LON,
-         CREATED_AT;
+         CREATED_AT emit changes;
 ```
 
 Test
@@ -328,16 +328,16 @@ Result
 |_ID       |_NAME     |          |          |          |          |RDER_RESTA|RDER_RESTA|RDER_ID   |DER_LAT   |DER_LON   |RDER_CREAT|RDER_LINES|RDER_TOTAL|
 |          |          |          |          |          |          |URANT_ID  |URANT_NAME|          |          |          |ED_DATE   |          |_PRICE    |
 +----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-|1         |RESTAURANT|a1dda2e9-e|16.8390354|108.503397|1619249916|1         |RESTAURANT|a1dda2e9-e|16.8390354|108.503397|1619249916|[{DISH_NAM|147000.0  |
-|          |_A        |7a6-4076-a|514122    |64356613  |935       |          |_A        |7a6-4076-a|514122    |64356613  |935       |E=Hoành th|          |
-|          |          |489-387fc5|          |          |          |          |          |489-387fc5|          |          |          |ánh chiên,|          |
-|          |          |feff6f    |          |          |          |          |          |feff6f    |          |          |          | ORDER_UNI|          |
-|          |          |          |          |          |          |          |          |          |          |          |          |T=3, DISH_|          |
-|          |          |          |          |          |          |          |          |          |          |          |          |PRICE=4900|          |
-|          |          |          |          |          |          |          |          |          |          |          |          |0.00, DISH|          |
-|          |          |          |          |          |          |          |          |          |          |          |          |_TYPE=DIMS|          |
-|          |          |          |          |          |          |          |          |          |          |          |          |UM, DISH_I|          |
-|          |          |          |          |          |          |          |          |          |          |          |          |D=15}]    |          |
+|1         |RESTAURANT|d0c43512-d|16.9464080|108.732419|1619356561|1         |RESTAURANT|d0c43512-d|16.9464080|108.732419|1619356561|[{DISH_NAM|720000.0  |
+|          |_A        |d7a-4768-9|3337097   |66962814  |202       |          |_A        |d7a-4768-9|3337097   |66962814  |202       |E=Roasted |          |
+|          |          |028-fed917|          |          |          |          |          |028-fed917|          |          |          |pork meat,|          |
+|          |          |12ba88    |          |          |          |          |          |12ba88    |          |          |          | ORDER_UNI|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |T=4, DISH_|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |PRICE=1800|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |00.00, DIS|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |H_TYPE=ROA|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |STED, DISH|          |
+|          |          |          |          |          |          |          |          |          |          |          |          |_ID=7}]   |          |
 ```
 
 Connect Superset to Citus

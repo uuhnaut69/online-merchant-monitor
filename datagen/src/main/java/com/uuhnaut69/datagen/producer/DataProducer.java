@@ -53,8 +53,8 @@ public class DataProducer {
                       value2 -> {
                         var unit = rand.nextInt(5 - 1) + 1;
 
-                        // Pre-created dishes have id in range 1 -> 27
-                        var dishId = rand.nextInt(27 - 1) + 1;
+                        // Pre-created dishes have id in range 1 -> 10
+                        var dishId = rand.nextInt(10 - 1) + 1;
                         orderLines.add(new OrderLine((long) dishId, unit));
                       });
               order.setOrderLines(orderLines);
