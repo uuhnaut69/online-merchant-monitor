@@ -213,7 +213,7 @@ select owr.RESTAURANT_ID                                                as RESTA
                'DISH_NAME' := d.NAME,
                'DISH_PRICE' := d.PRICE,
                'DISH_TYPE' := d.TYPE,
-               'UNIT' := cast(owr.ORDER_LINE -> UNIT as STRING)
+               'UNIT' := cast(owr.ORDER_LINE -> UNIT as VARCHAR)
            )                                                            as ORDER_LINE,
        ('DISH_ID:=' + d.ROWKEY + ',DISH_NAME:=' + d.NAME + ',DISH_PRICE:=' + d.PRICE + ',DISH_TYPE:=' + d.type +
         ',ORDER_UNIT:=' + cast(owr.ORDER_LINE -> UNIT as VARCHAR))      as ORDER_LINE_STRING,
